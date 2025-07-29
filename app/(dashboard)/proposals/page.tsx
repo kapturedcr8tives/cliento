@@ -1,54 +1,54 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { 
-  FileText, 
-  Plus, 
-  Search, 
-  Filter, 
-  Calendar,
-  DollarSign,
-  Eye,
-  Edit,
-  Trash2,
-  Send,
-  CheckCircle,
-  XCircle,
-  Clock,
-  AlertTriangle,
-  Download,
-  Copy
-} from "lucide-react"
-import { useProposalStore, proposalHelpers } from "@/stores/proposalStore"
-import { useModal, useDeleteModal } from "@/stores/modalStore"
-import { useNavigation } from "@/hooks/use-navigation"
-import { cn } from "@/lib/utils"
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Plus, Search, Filter, MoreHorizontal, Eye, Edit, Trash2, Send, FileText, Clock, CheckCircle, XCircle, AlertCircle, DollarSign, Calendar } from 'lucide-react'
+import { format } from 'date-fns'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Progress } from '@/components/ui/progress'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Separator } from '@/components/ui/separator'
+
+import { useProposalStore } from '@/stores/proposalStore'
+import { useModal } from '@/stores/modalStore'
+import { useAuthStore } from '@/stores/authStore'
+import { Proposal, ProposalStatus } from '@/types'
 
 export default function ProposalsPage() {
-  const { proposals, isLoading, error, fetchProposals, deleteProposal } = useProposalStore()
-  const { navigateTo } = useNavigation()
+  const router = useRouter()
+  const { user, organization } = useAuthStore()
+  const { 
+    proposals, 
+    isLoading, 
+    error, 
+    fetchProposals, 
+    deleteProposal,
+    sendProposal,
+    proposalHelpers 
+  } = useProposalStore()
   const { openModal } = useModal()
-  const { confirmDelete } = useDeleteModal()
-  
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [typeFilter, setTypeFilter] = useState("all")
-  const [sortBy, setSortBy] = useState("created_at")
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [typeFilter, setTypeFilter] = useState<string>('all')
+  const [sortBy, setSortBy] = useState<string>('createdAt')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   useEffect(() => {
-    fetchProposals()
-  }, [fetchProposals])
+    if (user && organization) {
+      fetchProposals()
+    }
+  }, [user, organization, fetchProposals])
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query)
+  const handleSearch = (value: string) => {
+    setSearchTerm(value)
   }
 
   const handleStatusFilter = (status: string) => {
@@ -61,174 +61,202 @@ export default function ProposalsPage() {
 
   const handleSort = (field: string) => {
     if (sortBy === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
     } else {
       setSortBy(field)
-      setSortOrder("asc")
+      setSortOrder('asc')
     }
   }
 
-  const handleDeleteProposal = (proposalId: string, proposalTitle: string) => {
-    confirmDelete(proposalTitle, async () => {
-      try {
-        await deleteProposal(proposalId)
-      } catch (error) {
-        console.error("Failed to delete proposal:", error)
+  const handleViewProposal = (proposal: Proposal) => {
+    router.push(`/proposals/${proposal.id}`)
+  }
+
+  const handleEditProposal = (proposal: Proposal) => {
+    openModal({
+      id: 'edit-proposal',
+      type: 'form',
+      title: 'Edit Proposal',
+      size: 'lg',
+      data: proposal,
+      config: {
+        fields: [
+          { name: 'title', label: 'Proposal Title', type: 'text', required: true },
+          { name: 'description', label: 'Description', type: 'textarea', required: false },
+          { name: 'clientId', label: 'Client', type: 'select', required: true },
+          { name: 'projectId', label: 'Related Project', type: 'select', required: false },
+          { name: 'type', label: 'Proposal Type', type: 'select', required: true },
+          { name: 'value', label: 'Proposal Value', type: 'number', required: true },
+          { name: 'validUntil', label: 'Valid Until', type: 'date', required: true },
+          { name: 'terms', label: 'Terms & Conditions', type: 'textarea', required: false },
+          { name: 'tags', label: 'Tags', type: 'tags', required: false }
+        ]
       }
     })
   }
 
-  const handleViewProposal = (proposalId: string) => {
-    navigateTo(`/dashboard/proposals/${proposalId}`)
+  const handleDeleteProposal = (proposal: Proposal) => {
+    openModal({
+      id: 'delete-proposal',
+      type: 'delete',
+      title: 'Delete Proposal',
+      message: `Are you sure you want to delete "${proposal.title}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await deleteProposal(proposal.id)
+          fetchProposals()
+        } catch (error) {
+          console.error('Failed to delete proposal:', error)
+        }
+      }
+    })
   }
 
-  const handleEditProposal = (proposalId: string) => {
-    navigateTo(`/dashboard/proposals/${proposalId}/edit`)
+  const handleSendProposal = (proposal: Proposal) => {
+    openModal({
+      id: 'send-proposal',
+      type: 'confirm',
+      title: 'Send Proposal',
+      message: `Send "${proposal.title}" to ${proposal.client?.name || 'the client'}?`,
+      onConfirm: async () => {
+        try {
+          await sendProposal(proposal.id)
+          fetchProposals()
+        } catch (error) {
+          console.error('Failed to send proposal:', error)
+        }
+      }
+    })
   }
 
   const handleAddProposal = () => {
-    navigateTo("/dashboard/proposals/new")
-  }
-
-  const handleSendProposal = (proposalId: string) => {
-    // TODO: Implement send proposal functionality
-    console.log("Sending proposal:", proposalId)
-  }
-
-  const handleDownloadProposal = (proposalId: string) => {
-    // TODO: Implement download functionality
-    console.log("Downloading proposal:", proposalId)
-  }
-
-  const handleDuplicateProposal = (proposalId: string) => {
-    // TODO: Implement duplicate functionality
-    console.log("Duplicating proposal:", proposalId)
+    openModal({
+      id: 'add-proposal',
+      type: 'form',
+      title: 'Create New Proposal',
+      size: 'lg',
+      config: {
+        fields: [
+          { name: 'title', label: 'Proposal Title', type: 'text', required: true },
+          { name: 'description', label: 'Description', type: 'textarea', required: false },
+          { name: 'clientId', label: 'Client', type: 'select', required: true },
+          { name: 'projectId', label: 'Related Project', type: 'select', required: false },
+          { name: 'type', label: 'Proposal Type', type: 'select', required: true },
+          { name: 'value', label: 'Proposal Value', type: 'number', required: true },
+          { name: 'validUntil', label: 'Valid Until', type: 'date', required: true },
+          { name: 'terms', label: 'Terms & Conditions', type: 'textarea', required: false },
+          { name: 'tags', label: 'Tags', type: 'tags', required: false }
+        ]
+      }
+    })
   }
 
   // Filter and sort proposals
   const filteredProposals = proposals
-    .filter((proposal) => {
-      const matchesSearch = searchQuery === "" || 
-        proposal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        proposal.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        proposal.client_name?.toLowerCase().includes(searchQuery.toLowerCase())
-      
-      const matchesStatus = statusFilter === "all" || proposal.status === statusFilter
-      const matchesType = typeFilter === "all" || proposal.type === typeFilter
-      
+    .filter(proposal => {
+      const matchesSearch = proposal.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          proposal.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          proposal.client?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesStatus = statusFilter === 'all' || proposal.status === statusFilter
+      const matchesType = typeFilter === 'all' || proposal.type === typeFilter
       return matchesSearch && matchesStatus && matchesType
     })
     .sort((a, b) => {
-      let aValue: any
-      let bValue: any
+      let aValue: any, bValue: any
       
       switch (sortBy) {
-        case "title":
-          aValue = a.title
-          bValue = b.title
+        case 'title':
+          aValue = a.title.toLowerCase()
+          bValue = b.title.toLowerCase()
           break
-        case "client":
-          aValue = a.client_name || ""
-          bValue = b.client_name || ""
-          break
-        case "status":
+        case 'status':
           aValue = a.status
           bValue = b.status
           break
-        case "type":
+        case 'type':
           aValue = a.type
           bValue = b.type
           break
-        case "value":
-          aValue = a.total_value || 0
-          bValue = b.total_value || 0
+        case 'value':
+          aValue = a.value || 0
+          bValue = b.value || 0
           break
-        case "created":
-          aValue = new Date(a.created_at).getTime()
-          bValue = new Date(b.created_at).getTime()
+        case 'validUntil':
+          aValue = a.validUntil ? new Date(a.validUntil).getTime() : 0
+          bValue = b.validUntil ? new Date(b.validUntil).getTime() : 0
           break
-        case "sent":
-          aValue = a.sent_at ? new Date(a.sent_at).getTime() : 0
-          bValue = b.sent_at ? new Date(b.sent_at).getTime() : 0
+        case 'createdAt':
+          aValue = new Date(a.createdAt).getTime()
+          bValue = new Date(b.createdAt).getTime()
           break
         default:
-          aValue = new Date(a.created_at).getTime()
-          bValue = new Date(b.created_at).getTime()
+          aValue = new Date(a.createdAt).getTime()
+          bValue = new Date(b.createdAt).getTime()
       }
       
-      if (sortOrder === "asc") {
+      if (sortOrder === 'asc') {
         return aValue > bValue ? 1 : -1
       } else {
         return aValue < bValue ? 1 : -1
       }
     })
 
-  const proposalStats = proposalHelpers.getProposalStats()
+  // Get proposal statistics
+  const proposalStats = proposalHelpers.getProposalStats(proposals)
+  const recentProposals = proposalHelpers.getRecentProposals(proposals, 5)
+  const expiringProposals = proposalHelpers.getExpiringProposals(proposals, 7)
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: ProposalStatus) => {
     switch (status) {
-      case "draft":
-        return "bg-gray-100 text-gray-800"
-      case "sent":
-        return "bg-blue-100 text-blue-800"
-      case "viewed":
-        return "bg-yellow-100 text-yellow-800"
-      case "accepted":
-        return "bg-green-100 text-green-800"
-      case "rejected":
-        return "bg-red-100 text-red-800"
-      case "expired":
-        return "bg-orange-100 text-orange-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+      case 'draft': return 'bg-gray-100 text-gray-800'
+      case 'sent': return 'bg-blue-100 text-blue-800'
+      case 'viewed': return 'bg-yellow-100 text-yellow-800'
+      case 'accepted': return 'bg-green-100 text-green-800'
+      case 'rejected': return 'bg-red-100 text-red-800'
+      case 'expired': return 'bg-gray-100 text-gray-600'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getStatusIcon = (status: ProposalStatus) => {
+    switch (status) {
+      case 'draft': return <FileText className="h-4 w-4 text-gray-500" />
+      case 'sent': return <Send className="h-4 w-4 text-blue-500" />
+      case 'viewed': return <Eye className="h-4 w-4 text-yellow-500" />
+      case 'accepted': return <CheckCircle className="h-4 w-4 text-green-500" />
+      case 'rejected': return <XCircle className="h-4 w-4 text-red-500" />
+      case 'expired': return <Clock className="h-4 w-4 text-gray-500" />
+      default: return <FileText className="h-4 w-4 text-gray-500" />
     }
   }
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case "service":
-        return "bg-purple-100 text-purple-800"
-      case "project":
-        return "bg-indigo-100 text-indigo-800"
-      case "retainer":
-        return "bg-teal-100 text-teal-800"
-      case "consultation":
-        return "bg-pink-100 text-pink-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+      case 'service': return 'bg-purple-100 text-purple-800'
+      case 'project': return 'bg-blue-100 text-blue-800'
+      case 'retainer': return 'bg-green-100 text-green-800'
+      case 'consultation': return 'bg-orange-100 text-orange-800'
+      default: return 'bg-gray-100 text-gray-800'
     }
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "draft":
-        return <FileText className="h-4 w-4 text-gray-600" />
-      case "sent":
-        return <Send className="h-4 w-4 text-blue-600" />
-      case "viewed":
-        return <Eye className="h-4 w-4 text-yellow-600" />
-      case "accepted":
-        return <CheckCircle className="h-4 w-4 text-green-600" />
-      case "rejected":
-        return <XCircle className="h-4 w-4 text-red-600" />
-      case "expired":
-        return <AlertTriangle className="h-4 w-4 text-orange-600" />
-      default:
-        return <FileText className="h-4 w-4 text-gray-600" />
-    }
+  const isExpiringSoon = (validUntil: string) => {
+    const validDate = new Date(validUntil)
+    const now = new Date()
+    const diffDays = Math.ceil((validDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    return diffDays <= 7 && diffDays > 0
   }
 
-  const isExpired = (expiryDate: string | null) => {
-    if (!expiryDate) return false
-    return new Date(expiryDate) < new Date()
+  const isExpired = (validUntil: string) => {
+    return new Date(validUntil) < new Date()
   }
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading proposals...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading proposals...</p>
         </div>
       </div>
     )
@@ -236,16 +264,16 @@ export default function ProposalsPage() {
 
   if (error) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center h-32">
-          <div className="text-center">
-            <p className="text-red-600">Error loading proposals: {error}</p>
-            <Button onClick={() => fetchProposals()} className="mt-2">
-              Retry
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-2">Failed to load proposals</p>
+          <p className="text-muted-foreground text-sm">{error}</p>
+          <Button onClick={() => fetchProposals()} className="mt-4">
+            Try Again
+          </Button>
+        </div>
+      </div>
     )
   }
 
@@ -254,19 +282,19 @@ export default function ProposalsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Proposals</h1>
-          <p className="text-gray-600">
+          <h1 className="text-3xl font-bold tracking-tight">Proposals</h1>
+          <p className="text-muted-foreground">
             Create, manage, and track your client proposals
           </p>
         </div>
-        <Button onClick={handleAddProposal} className="flex items-center space-x-2">
-          <Plus className="h-4 w-4" />
-          <span>New Proposal</span>
+        <Button onClick={handleAddProposal}>
+          <Plus className="h-4 w-4 mr-2" />
+          Create Proposal
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Statistics Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Proposals</CardTitle>
@@ -275,67 +303,43 @@ export default function ProposalsPage() {
           <CardContent>
             <div className="text-2xl font-bold">{proposalStats.total}</div>
             <p className="text-xs text-muted-foreground">
-              +{proposalStats.newProposalsThisMonth} this month
+              {proposalStats.draft} drafts
             </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sent</CardTitle>
-            <div className="h-4 w-4 rounded-full bg-blue-100 flex items-center justify-center">
-              <div className="h-2 w-2 rounded-full bg-blue-600"></div>
-            </div>
+            <CardTitle className="text-sm font-medium">Sent Proposals</CardTitle>
+            <Send className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{proposalStats.sent}</div>
             <p className="text-xs text-muted-foreground">
-              {((proposalStats.sent / proposalStats.total) * 100).toFixed(1)}% of total
+              {proposalStats.viewed} viewed
             </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Accepted</CardTitle>
-            <div className="h-4 w-4 rounded-full bg-green-100 flex items-center justify-center">
-              <div className="h-2 w-2 rounded-full bg-green-600"></div>
-            </div>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{proposalStats.accepted}</div>
+            <div className="text-2xl font-bold text-green-600">{proposalStats.accepted}</div>
             <p className="text-xs text-muted-foreground">
-              {proposalStats.acceptanceRate.toFixed(1)}% acceptance rate
+              {proposalStats.acceptanceRate}% acceptance rate
             </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Value</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              ${proposalStats.totalValue.toLocaleString()}
-            </div>
+            <div className="text-2xl font-bold">${proposalStats.totalValue.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              ${proposalStats.averageValue.toFixed(0)} avg per proposal
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <div className="h-4 w-4 rounded-full bg-yellow-100 flex items-center justify-center">
-              <div className="h-2 w-2 rounded-full bg-yellow-600"></div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{proposalStats.pending}</div>
-            <p className="text-xs text-muted-foreground">
-              Awaiting response
+              ${proposalStats.averageValue.toLocaleString()} avg per proposal
             </p>
           </CardContent>
         </Card>
@@ -344,30 +348,28 @@ export default function ProposalsPage() {
       {/* Filters and Search */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Filter className="h-5 w-5" />
-            <span>Filters & Search</span>
-          </CardTitle>
+          <CardTitle>Proposal List</CardTitle>
+          <CardDescription>
+            Manage and track all your proposals
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search proposals by title, description, or client..."
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search proposals..."
+                value={searchTerm}
+                onChange={(e) => handleSearch(e.target.value)}
+                className="pl-10"
+              />
             </div>
             <Select value={statusFilter} onValueChange={handleStatusFilter}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="Status" />
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
                 <SelectItem value="sent">Sent</SelectItem>
                 <SelectItem value="viewed">Viewed</SelectItem>
@@ -377,8 +379,8 @@ export default function ProposalsPage() {
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={handleTypeFilter}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="Type" />
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
@@ -389,272 +391,283 @@ export default function ProposalsPage() {
               </SelectContent>
             </Select>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Proposals Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Proposals</CardTitle>
-          <CardDescription>
-            {filteredProposals.length} of {proposals.length} proposals
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
+          {/* Proposals Table */}
+          <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("title")}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('title')}
                   >
-                    <div className="flex items-center space-x-1">
-                      <span>Proposal</span>
-                      {sortBy === "title" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
+                    Proposal Title
+                  </TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('type')}
+                  >
+                    Type
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("client")}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('status')}
                   >
-                    <div className="flex items-center space-x-1">
-                      <span>Client</span>
-                      {sortBy === "client" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
+                    Status
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("status")}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('value')}
                   >
-                    <div className="flex items-center space-x-1">
-                      <span>Status</span>
-                      {sortBy === "status" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
+                    Value
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("type")}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('validUntil')}
                   >
-                    <div className="flex items-center space-x-1">
-                      <span>Type</span>
-                      {sortBy === "type" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
+                    Valid Until
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("value")}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('createdAt')}
                   >
-                    <div className="flex items-center space-x-1">
-                      <span>Value</span>
-                      {sortBy === "value" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("sent")}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Sent</span>
-                      {sortBy === "sent" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("created")}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Created</span>
-                      {sortBy === "created" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
+                    Created
                   </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProposals.map((proposal) => {
-                  const isExpiredProposal = isExpired(proposal.expiry_date)
-                  
-                  return (
-                    <TableRow key={proposal.id} className="hover:bg-gray-50">
-                      <TableCell>
-                        <div className="flex items-center space-x-3">
-                          <div className="flex-shrink-0">
+                {filteredProposals.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
+                      <div className="text-muted-foreground">
+                        {searchTerm || statusFilter !== 'all' || typeFilter !== 'all' 
+                          ? 'No proposals match your filters' 
+                          : 'No proposals found'}
+                      </div>
+                      {searchTerm || statusFilter !== 'all' || typeFilter !== 'all' && (
+                        <Button 
+                          variant="outline" 
+                          onClick={() => {
+                            setSearchTerm('')
+                            setStatusFilter('all')
+                            setTypeFilter('all')
+                          }}
+                          className="mt-2"
+                        >
+                          Clear Filters
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredProposals.map((proposal) => {
+                    const isExpiring = isExpiringSoon(proposal.validUntil)
+                    const isExpiredProposal = isExpired(proposal.validUntil)
+                    
+                    return (
+                      <TableRow 
+                        key={proposal.id} 
+                        className={
+                          isExpiredProposal ? 'bg-red-50' : 
+                          isExpiring ? 'bg-yellow-50' : ''
+                        }
+                      >
+                        <TableCell>
+                          <div className="flex items-center space-x-3">
                             {getStatusIcon(proposal.status)}
+                            <div className="flex-1">
+                              <div className="font-medium">{proposal.title}</div>
+                              {proposal.description && (
+                                <div className="text-sm text-muted-foreground truncate max-w-xs">
+                                  {proposal.description}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-medium">{proposal.title}</div>
-                            {proposal.description && (
-                              <div className="text-sm text-gray-500 truncate max-w-xs">
-                                {proposal.description}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {proposal.client_name && (
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-center space-x-2">
                             <Avatar className="h-6 w-6">
-                              <AvatarFallback className="text-xs">
-                                {proposal.client_name.charAt(0).toUpperCase()}
+                              <AvatarFallback>
+                                {proposal.client?.name?.charAt(0) || 'C'}
                               </AvatarFallback>
                             </Avatar>
-                            <span className="text-sm">{proposal.client_name}</span>
+                            <span className="text-sm">{proposal.client?.name || 'Unknown Client'}</span>
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(proposal.status)}>
-                          {proposal.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getTypeColor(proposal.type)}>
-                          {proposal.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1">
-                          <DollarSign className="h-3 w-3 text-gray-400" />
-                          <span className="text-sm">
-                            ${(proposal.total_value || 0).toLocaleString()}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {proposal.sent_at ? (
-                          <div className="flex items-center space-x-1">
-                            <Calendar className="h-3 w-3 text-gray-400" />
-                            <span className="text-sm">
-                              {new Date(proposal.sent_at).toLocaleDateString()}
-                            </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getTypeColor(proposal.type)}>
+                            {proposal.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getStatusColor(proposal.status)}>
+                            {proposal.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm font-medium">
+                            ${proposal.value?.toLocaleString() || '0'}
                           </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">Not sent</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1">
-                          <Calendar className="h-3 w-3 text-gray-400" />
-                          <span className="text-sm">
-                            {new Date(proposal.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleViewProposal(proposal.id)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {proposal.status === "draft" && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditProposal(proposal.id)}
-                                className="h-8 w-8 p-0"
-                              >
-                                <Edit className="h-4 w-4" />
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {proposal.validUntil 
+                              ? format(new Date(proposal.validUntil), 'MMM dd, yyyy')
+                              : 'No expiry'
+                            }
+                            {isExpiring && !isExpiredProposal && (
+                              <div className="text-xs text-yellow-600">Expiring soon</div>
+                            )}
+                            {isExpiredProposal && (
+                              <div className="text-xs text-red-600">Expired</div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {format(new Date(proposal.createdAt), 'MMM dd, yyyy')}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <MoreHorizontal className="h-4 w-4" />
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleSendProposal(proposal.id)}
-                                className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleViewProposal(proposal)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              {proposal.status === 'draft' && (
+                                <>
+                                  <DropdownMenuItem onClick={() => handleEditProposal(proposal)}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit Proposal
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleSendProposal(proposal)}>
+                                    <Send className="mr-2 h-4 w-4" />
+                                    Send Proposal
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteProposal(proposal)}
+                                className="text-red-600"
                               >
-                                <Send className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDownloadProposal(proposal.id)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDuplicateProposal(proposal.id)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteProposal(proposal.id, proposal.title)}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete Proposal
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
               </TableBody>
             </Table>
           </div>
-          
-          {filteredProposals.length === 0 && (
-            <div className="text-center py-8">
-              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                No proposals found
-              </h3>
-              <p className="text-gray-500 mb-4">
-                {searchQuery || statusFilter !== "all" || typeFilter !== "all"
-                  ? "Try adjusting your search or filters"
-                  : "Get started by creating your first proposal"
-                }
-              </p>
-              {!searchQuery && statusFilter === "all" && typeFilter === "all" && (
-                <Button onClick={handleAddProposal}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Proposal
-                </Button>
-              )}
-            </div>
-          )}
+
+          {/* Summary */}
+          <div className="mt-4 text-sm text-muted-foreground">
+            Showing {filteredProposals.length} of {proposals.length} proposals
+          </div>
         </CardContent>
       </Card>
+
+      {/* Recent Proposals */}
+      {recentProposals.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Proposals</CardTitle>
+            <CardDescription>
+              Proposals you've created recently
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentProposals.map((proposal) => (
+                <div key={proposal.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    {getStatusIcon(proposal.status)}
+                    <div className="flex-1">
+                      <div className="font-medium">{proposal.title}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {proposal.client?.name} • {proposal.status} • ${proposal.value?.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge className={getStatusColor(proposal.status)}>
+                      {proposal.status}
+                    </Badge>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleViewProposal(proposal)}
+                    >
+                      View
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Expiring Proposals Alert */}
+      {expiringProposals.length > 0 && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardHeader>
+            <CardTitle className="text-yellow-800 flex items-center">
+              <AlertCircle className="mr-2 h-5 w-5" />
+              Expiring Proposals
+            </CardTitle>
+            <CardDescription className="text-yellow-600">
+              {expiringProposals.length} proposal(s) will expire soon
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {expiringProposals.slice(0, 3).map((proposal) => (
+                <div key={proposal.id} className="flex items-center justify-between p-3 bg-white rounded border">
+                  <div>
+                    <div className="font-medium">{proposal.title}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Expires: {proposal.validUntil ? format(new Date(proposal.validUntil), 'MMM dd, yyyy') : 'No expiry'}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge className={getStatusColor(proposal.status)}>
+                      {proposal.status}
+                    </Badge>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleViewProposal(proposal)}
+                    >
+                      Review
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {expiringProposals.length > 3 && (
+                <div className="text-center pt-2">
+                  <Button variant="outline" size="sm">
+                    View All {expiringProposals.length} Expiring Proposals
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

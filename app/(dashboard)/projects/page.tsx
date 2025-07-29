@@ -1,54 +1,54 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Progress } from "@/components/ui/progress"
-import { 
-  FolderOpen, 
-  Plus, 
-  Search, 
-  Filter, 
-  Calendar,
-  Clock,
-  DollarSign,
-  Users,
-  Eye,
-  Edit,
-  Trash2,
-  AlertTriangle,
-  CheckCircle,
-  Pause,
-  Play
-} from "lucide-react"
-import { useProjectStore, projectHelpers } from "@/stores/projectStore"
-import { useModal, useDeleteModal } from "@/stores/modalStore"
-import { useNavigation } from "@/hooks/use-navigation"
-import { cn } from "@/lib/utils"
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Plus, Search, Filter, MoreHorizontal, Eye, Edit, Trash2, Calendar, Clock, Users, Target, AlertCircle } from 'lucide-react'
+import { format } from 'date-fns'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Progress } from '@/components/ui/progress'
+import { Avatar, AvatarFallback, AvatarGroup } from '@/components/ui/avatar'
+import { Separator } from '@/components/ui/separator'
+
+import { useProjectStore } from '@/stores/projectStore'
+import { useModal } from '@/stores/modalStore'
+import { useAuthStore } from '@/stores/authStore'
+import { Project, ProjectStatus, ProjectPriority } from '@/types'
 
 export default function ProjectsPage() {
-  const { projects, isLoading, error, fetchProjects, deleteProject } = useProjectStore()
-  const { navigateTo } = useNavigation()
+  const router = useRouter()
+  const { user, organization } = useAuthStore()
+  const { 
+    projects, 
+    isLoading, 
+    error, 
+    fetchProjects, 
+    deleteProject,
+    projectHelpers 
+  } = useProjectStore()
   const { openModal } = useModal()
-  const { confirmDelete } = useDeleteModal()
-  
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [priorityFilter, setPriorityFilter] = useState("all")
-  const [sortBy, setSortBy] = useState("name")
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [priorityFilter, setPriorityFilter] = useState<string>('all')
+  const [sortBy, setSortBy] = useState<string>('name')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
 
   useEffect(() => {
-    fetchProjects()
-  }, [fetchProjects])
+    if (user && organization) {
+      fetchProjects()
+    }
+  }, [user, organization, fetchProjects])
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query)
+  const handleSearch = (value: string) => {
+    setSearchTerm(value)
+    // In a real app, you might want to debounce this
   }
 
   const handleStatusFilter = (status: string) => {
@@ -61,157 +61,173 @@ export default function ProjectsPage() {
 
   const handleSort = (field: string) => {
     if (sortBy === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
     } else {
       setSortBy(field)
-      setSortOrder("asc")
+      setSortOrder('asc')
     }
   }
 
-  const handleDeleteProject = (projectId: string, projectName: string) => {
-    confirmDelete(projectName, async () => {
-      try {
-        await deleteProject(projectId)
-      } catch (error) {
-        console.error("Failed to delete project:", error)
+  const handleViewProject = (project: Project) => {
+    router.push(`/projects/${project.id}`)
+  }
+
+  const handleEditProject = (project: Project) => {
+    openModal({
+      id: 'edit-project',
+      type: 'form',
+      title: 'Edit Project',
+      size: 'lg',
+      data: project,
+      config: {
+        fields: [
+          { name: 'name', label: 'Project Name', type: 'text', required: true },
+          { name: 'description', label: 'Description', type: 'textarea', required: false },
+          { name: 'clientId', label: 'Client', type: 'select', required: true },
+          { name: 'status', label: 'Status', type: 'select', required: true },
+          { name: 'priority', label: 'Priority', type: 'select', required: true },
+          { name: 'startDate', label: 'Start Date', type: 'date', required: true },
+          { name: 'endDate', label: 'End Date', type: 'date', required: false },
+          { name: 'budget', label: 'Budget', type: 'number', required: false },
+          { name: 'tags', label: 'Tags', type: 'tags', required: false }
+        ]
       }
     })
   }
 
-  const handleViewProject = (projectId: string) => {
-    navigateTo(`/dashboard/projects/${projectId}`)
-  }
-
-  const handleEditProject = (projectId: string) => {
-    navigateTo(`/dashboard/projects/${projectId}/edit`)
+  const handleDeleteProject = (project: Project) => {
+    openModal({
+      id: 'delete-project',
+      type: 'delete',
+      title: 'Delete Project',
+      message: `Are you sure you want to delete "${project.name}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await deleteProject(project.id)
+          // Refresh projects list
+          fetchProjects()
+        } catch (error) {
+          console.error('Failed to delete project:', error)
+        }
+      }
+    })
   }
 
   const handleAddProject = () => {
-    navigateTo("/dashboard/projects/new")
+    openModal({
+      id: 'add-project',
+      type: 'form',
+      title: 'Add New Project',
+      size: 'lg',
+      config: {
+        fields: [
+          { name: 'name', label: 'Project Name', type: 'text', required: true },
+          { name: 'description', label: 'Description', type: 'textarea', required: false },
+          { name: 'clientId', label: 'Client', type: 'select', required: true },
+          { name: 'status', label: 'Status', type: 'select', required: true },
+          { name: 'priority', label: 'Priority', type: 'select', required: true },
+          { name: 'startDate', label: 'Start Date', type: 'date', required: true },
+          { name: 'endDate', label: 'End Date', type: 'date', required: false },
+          { name: 'budget', label: 'Budget', type: 'number', required: false },
+          { name: 'tags', label: 'Tags', type: 'tags', required: false }
+        ]
+      }
+    })
   }
 
   // Filter and sort projects
   const filteredProjects = projects
-    .filter((project) => {
-      const matchesSearch = searchQuery === "" || 
-        project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        project.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        project.client_name?.toLowerCase().includes(searchQuery.toLowerCase())
-      
-      const matchesStatus = statusFilter === "all" || project.status === statusFilter
-      const matchesPriority = priorityFilter === "all" || project.priority === priorityFilter
-      
+    .filter(project => {
+      const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          project.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesStatus = statusFilter === 'all' || project.status === statusFilter
+      const matchesPriority = priorityFilter === 'all' || project.priority === priorityFilter
       return matchesSearch && matchesStatus && matchesPriority
     })
     .sort((a, b) => {
-      let aValue: any
-      let bValue: any
+      let aValue: any, bValue: any
       
       switch (sortBy) {
-        case "name":
-          aValue = a.name
-          bValue = b.name
+        case 'name':
+          aValue = a.name.toLowerCase()
+          bValue = b.name.toLowerCase()
           break
-        case "client":
-          aValue = a.client_name || ""
-          bValue = b.client_name || ""
-          break
-        case "status":
+        case 'status':
           aValue = a.status
           bValue = b.status
           break
-        case "priority":
+        case 'priority':
           aValue = a.priority
           bValue = b.priority
           break
-        case "progress":
-          aValue = projectHelpers.calculateProjectProgress(a)
-          bValue = projectHelpers.calculateProjectProgress(b)
+        case 'startDate':
+          aValue = new Date(a.startDate).getTime()
+          bValue = new Date(b.startDate).getTime()
           break
-        case "budget":
+        case 'endDate':
+          aValue = a.endDate ? new Date(a.endDate).getTime() : 0
+          bValue = b.endDate ? new Date(b.endDate).getTime() : 0
+          break
+        case 'budget':
           aValue = a.budget || 0
           bValue = b.budget || 0
           break
-        case "deadline":
-          aValue = a.deadline ? new Date(a.deadline).getTime() : 0
-          bValue = b.deadline ? new Date(b.deadline).getTime() : 0
-          break
-        case "created":
-          aValue = new Date(a.created_at).getTime()
-          bValue = new Date(b.created_at).getTime()
+        case 'progress':
+          aValue = projectHelpers.calculateProjectProgress(a)
+          bValue = projectHelpers.calculateProjectProgress(b)
           break
         default:
-          aValue = a.name
-          bValue = b.name
+          aValue = a.name.toLowerCase()
+          bValue = b.name.toLowerCase()
       }
       
-      if (sortOrder === "asc") {
+      if (sortOrder === 'asc') {
         return aValue > bValue ? 1 : -1
       } else {
         return aValue < bValue ? 1 : -1
       }
     })
 
-  const projectStats = projectHelpers.getProjectStats()
+  // Get project statistics
+  const projectStats = projectHelpers.getProjectStats(projects)
+  const recentProjects = projectHelpers.getRecentProjects(projects, 5)
+  const overdueProjects = projectHelpers.getOverdueProjects(projects)
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: ProjectStatus) => {
     switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800"
-      case "completed":
-        return "bg-blue-100 text-blue-800"
-      case "on_hold":
-        return "bg-yellow-100 text-yellow-800"
-      case "cancelled":
-        return "bg-red-100 text-red-800"
-      case "planning":
-        return "bg-purple-100 text-purple-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+      case 'active': return 'bg-green-100 text-green-800'
+      case 'completed': return 'bg-blue-100 text-blue-800'
+      case 'on-hold': return 'bg-yellow-100 text-yellow-800'
+      case 'cancelled': return 'bg-red-100 text-red-800'
+      case 'planning': return 'bg-gray-100 text-gray-800'
+      default: return 'bg-gray-100 text-gray-800'
     }
   }
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityColor = (priority: ProjectPriority) => {
     switch (priority) {
-      case "high":
-        return "bg-red-100 text-red-800"
-      case "medium":
-        return "bg-yellow-100 text-yellow-800"
-      case "low":
-        return "bg-green-100 text-green-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+      case 'high': return 'bg-red-100 text-red-800'
+      case 'medium': return 'bg-yellow-100 text-yellow-800'
+      case 'low': return 'bg-green-100 text-green-800'
+      default: return 'bg-gray-100 text-gray-800'
     }
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "active":
-        return <Play className="h-4 w-4 text-green-600" />
-      case "completed":
-        return <CheckCircle className="h-4 w-4 text-blue-600" />
-      case "on_hold":
-        return <Pause className="h-4 w-4 text-yellow-600" />
-      case "cancelled":
-        return <AlertTriangle className="h-4 w-4 text-red-600" />
-      case "planning":
-        return <Calendar className="h-4 w-4 text-purple-600" />
-      default:
-        return <FolderOpen className="h-4 w-4 text-gray-600" />
+  const getPriorityIcon = (priority: ProjectPriority) => {
+    switch (priority) {
+      case 'high': return <AlertCircle className="h-4 w-4 text-red-500" />
+      case 'medium': return <Target className="h-4 w-4 text-yellow-500" />
+      case 'low': return <Target className="h-4 w-4 text-green-500" />
+      default: return <Target className="h-4 w-4 text-gray-500" />
     }
-  }
-
-  const isOverdue = (deadline: string | null) => {
-    if (!deadline) return false
-    return new Date(deadline) < new Date()
   }
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading projects...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading projects...</p>
         </div>
       </div>
     )
@@ -219,16 +235,16 @@ export default function ProjectsPage() {
 
   if (error) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center h-32">
-          <div className="text-center">
-            <p className="text-red-600">Error loading projects: {error}</p>
-            <Button onClick={() => fetchProjects()} className="mt-2">
-              Retry
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-2">Failed to load projects</p>
+          <p className="text-muted-foreground text-sm">{error}</p>
+          <Button onClick={() => fetchProjects()} className="mt-4">
+            Try Again
+          </Button>
+        </div>
+      </div>
     )
   }
 
@@ -237,88 +253,64 @@ export default function ProjectsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
-          <p className="text-gray-600">
-            Manage your projects, track progress, and collaborate with your team
+          <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
+          <p className="text-muted-foreground">
+            Manage your projects and track their progress
           </p>
         </div>
-        <Button onClick={handleAddProject} className="flex items-center space-x-2">
-          <Plus className="h-4 w-4" />
-          <span>New Project</span>
+        <Button onClick={handleAddProject}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Project
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Statistics Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Projects</CardTitle>
-            <FolderOpen className="h-4 w-4 text-muted-foreground" />
+            <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{projectStats.total}</div>
             <p className="text-xs text-muted-foreground">
-              +{projectStats.newProjectsThisMonth} this month
+              {projectStats.active} active
             </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
-            <div className="h-4 w-4 rounded-full bg-green-100 flex items-center justify-center">
-              <div className="h-2 w-2 rounded-full bg-green-600"></div>
-            </div>
+            <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{projectStats.active}</div>
             <p className="text-xs text-muted-foreground">
-              {((projectStats.active / projectStats.total) * 100).toFixed(1)}% of total
+              {projectStats.completed} completed
             </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <div className="h-4 w-4 rounded-full bg-blue-100 flex items-center justify-center">
-              <div className="h-2 w-2 rounded-full bg-blue-600"></div>
-            </div>
+            <CardTitle className="text-sm font-medium">Overdue Projects</CardTitle>
+            <AlertCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{projectStats.completed}</div>
-            <p className="text-xs text-muted-foreground">
-              {((projectStats.completed / projectStats.total) * 100).toFixed(1)}% completion rate
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Budget</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              ${projectStats.totalBudget.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              ${projectStats.averageBudget.toFixed(0)} avg per project
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-            <div className="h-4 w-4 rounded-full bg-red-100 flex items-center justify-center">
-              <div className="h-2 w-2 rounded-full bg-red-600"></div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{projectStats.overdue}</div>
+            <div className="text-2xl font-bold text-red-600">{overdueProjects.length}</div>
             <p className="text-xs text-muted-foreground">
               Need attention
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Avg Progress</CardTitle>
+            <Progress className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{projectStats.averageProgress}%</div>
+            <p className="text-xs text-muted-foreground">
+              Across all projects
             </p>
           </CardContent>
         </Card>
@@ -327,297 +319,315 @@ export default function ProjectsPage() {
       {/* Filters and Search */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Filter className="h-5 w-5" />
-            <span>Filters & Search</span>
-          </CardTitle>
+          <CardTitle>Project List</CardTitle>
+          <CardDescription>
+            Manage and track all your projects
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search projects by name, description, or client..."
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search projects..."
+                value={searchTerm}
+                onChange={(e) => handleSearch(e.target.value)}
+                className="pl-10"
+              />
             </div>
             <Select value={statusFilter} onValueChange={handleStatusFilter}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="Status" />
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="on_hold">On Hold</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="planning">Planning</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="on-hold">On Hold</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
             <Select value={priorityFilter} onValueChange={handlePriorityFilter}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="Priority" />
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by priority" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Priorities</SelectItem>
+                <SelectItem value="all">All Priority</SelectItem>
                 <SelectItem value="high">High</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
                 <SelectItem value="low">Low</SelectItem>
               </SelectContent>
             </Select>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Projects Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Projects</CardTitle>
-          <CardDescription>
-            {filteredProjects.length} of {projects.length} projects
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
+          {/* Projects Table */}
+          <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("name")}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('name')}
                   >
-                    <div className="flex items-center space-x-1">
-                      <span>Project</span>
-                      {sortBy === "name" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
+                    Project Name
+                  </TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('status')}
+                  >
+                    Status
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("client")}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('priority')}
                   >
-                    <div className="flex items-center space-x-1">
-                      <span>Client</span>
-                      {sortBy === "client" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
+                    Priority
+                  </TableHead>
+                  <TableHead>Progress</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('startDate')}
+                  >
+                    Start Date
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("status")}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('endDate')}
                   >
-                    <div className="flex items-center space-x-1">
-                      <span>Status</span>
-                      {sortBy === "status" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
+                    End Date
                   </TableHead>
                   <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("priority")}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleSort('budget')}
                   >
-                    <div className="flex items-center space-x-1">
-                      <span>Priority</span>
-                      {sortBy === "priority" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("progress")}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Progress</span>
-                      {sortBy === "progress" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("budget")}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Budget</span>
-                      {sortBy === "budget" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("deadline")}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Deadline</span>
-                      {sortBy === "deadline" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
+                    Budget
                   </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProjects.map((project) => {
-                  const progress = projectHelpers.calculateProjectProgress(project)
-                  const isOverdueProject = isOverdue(project.deadline)
-                  
-                  return (
-                    <TableRow key={project.id} className="hover:bg-gray-50">
-                      <TableCell>
-                        <div className="flex items-center space-x-3">
-                          <div className="flex-shrink-0">
-                            {getStatusIcon(project.status)}
+                {filteredProjects.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-8">
+                      <div className="text-muted-foreground">
+                        {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' 
+                          ? 'No projects match your filters' 
+                          : 'No projects found'}
+                      </div>
+                      {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' && (
+                        <Button 
+                          variant="outline" 
+                          onClick={() => {
+                            setSearchTerm('')
+                            setStatusFilter('all')
+                            setPriorityFilter('all')
+                          }}
+                          className="mt-2"
+                        >
+                          Clear Filters
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredProjects.map((project) => {
+                    const progress = projectHelpers.calculateProjectProgress(project)
+                    const isOverdue = project.endDate && new Date(project.endDate) < new Date()
+                    
+                    return (
+                      <TableRow key={project.id} className={isOverdue ? 'bg-red-50' : ''}>
+                        <TableCell>
+                          <div className="flex items-center space-x-3">
+                            <div className="flex-1">
+                              <div className="font-medium">{project.name}</div>
+                              {project.description && (
+                                <div className="text-sm text-muted-foreground truncate max-w-xs">
+                                  {project.description}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-medium">{project.name}</div>
-                            {project.description && (
-                              <div className="text-sm text-gray-500 truncate max-w-xs">
-                                {project.description}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {project.client_name && (
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-center space-x-2">
                             <Avatar className="h-6 w-6">
-                              <AvatarFallback className="text-xs">
-                                {project.client_name.charAt(0).toUpperCase()}
+                              <AvatarFallback>
+                                {project.client?.name?.charAt(0) || 'C'}
                               </AvatarFallback>
                             </Avatar>
-                            <span className="text-sm">{project.client_name}</span>
+                            <span className="text-sm">{project.client?.name || 'Unknown Client'}</span>
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(project.status)}>
-                          {project.status.replace('_', ' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getPriorityColor(project.priority)}>
-                          {project.priority}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span>{progress}%</span>
-                            {isOverdueProject && (
-                              <AlertTriangle className="h-3 w-3 text-red-500" />
-                            )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getStatusColor(project.status)}>
+                            {project.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            {getPriorityIcon(project.priority)}
+                            <Badge className={getPriorityColor(project.priority)}>
+                              {project.priority}
+                            </Badge>
                           </div>
-                          <Progress value={progress} className="h-2" />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1">
-                          <DollarSign className="h-3 w-3 text-gray-400" />
-                          <span className="text-sm">
-                            ${(project.budget || 0).toLocaleString()}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {project.deadline ? (
-                          <div className={cn(
-                            "flex items-center space-x-1",
-                            isOverdueProject && "text-red-600"
-                          )}>
-                            <Calendar className="h-3 w-3 text-gray-400" />
-                            <span className="text-sm">
-                              {new Date(project.deadline).toLocaleDateString()}
-                            </span>
-                            {isOverdueProject && (
-                              <span className="text-xs text-red-600">Overdue</span>
-                            )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Progress value={progress} className="w-16" />
+                            <span className="text-sm text-muted-foreground">{progress}%</span>
                           </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">No deadline</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleViewProject(project.id)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditProject(project.id)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteProject(project.id, project.name)}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {format(new Date(project.startDate), 'MMM dd, yyyy')}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {project.endDate 
+                              ? format(new Date(project.endDate), 'MMM dd, yyyy')
+                              : 'No end date'
+                            }
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {project.budget 
+                              ? `$${project.budget.toLocaleString()}`
+                              : 'No budget'
+                            }
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleViewProject(project)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEditProject(project)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit Project
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteProject(project)}
+                                className="text-red-600"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete Project
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
               </TableBody>
             </Table>
           </div>
-          
-          {filteredProjects.length === 0 && (
-            <div className="text-center py-8">
-              <FolderOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                No projects found
-              </h3>
-              <p className="text-gray-500 mb-4">
-                {searchQuery || statusFilter !== "all" || priorityFilter !== "all"
-                  ? "Try adjusting your search or filters"
-                  : "Get started by creating your first project"
-                }
-              </p>
-              {!searchQuery && statusFilter === "all" && priorityFilter === "all" && (
-                <Button onClick={handleAddProject}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Project
-                </Button>
-              )}
-            </div>
-          )}
+
+          {/* Summary */}
+          <div className="mt-4 text-sm text-muted-foreground">
+            Showing {filteredProjects.length} of {projects.length} projects
+          </div>
         </CardContent>
       </Card>
+
+      {/* Recent Projects */}
+      {recentProjects.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Projects</CardTitle>
+            <CardDescription>
+              Projects you've worked on recently
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentProjects.map((project) => {
+                const progress = projectHelpers.calculateProjectProgress(project)
+                
+                return (
+                  <div key={project.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-4">
+                      <div className="flex-1">
+                        <div className="font-medium">{project.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {project.client?.name} • {project.status}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <div className="text-sm font-medium">{progress}%</div>
+                        <div className="text-xs text-muted-foreground">Progress</div>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleViewProject(project)}
+                      >
+                        View
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Overdue Projects Alert */}
+      {overdueProjects.length > 0 && (
+        <Card className="border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle className="text-red-800 flex items-center">
+              <AlertCircle className="mr-2 h-5 w-5" />
+              Overdue Projects
+            </CardTitle>
+            <CardDescription className="text-red-600">
+              {overdueProjects.length} project(s) are past their due date
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {overdueProjects.slice(0, 3).map((project) => (
+                <div key={project.id} className="flex items-center justify-between p-3 bg-white rounded border">
+                  <div>
+                    <div className="font-medium">{project.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Due: {project.endDate ? format(new Date(project.endDate), 'MMM dd, yyyy') : 'No due date'}
+                    </div>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewProject(project)}
+                  >
+                    Review
+                  </Button>
+                </div>
+              ))}
+              {overdueProjects.length > 3 && (
+                <div className="text-center pt-2">
+                  <Button variant="outline" size="sm">
+                    View All {overdueProjects.length} Overdue Projects
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
