@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: crm-production
+
+resources:
+- ../../base
+
+patches:
+- path: namespace-patch.yaml
+  target:
+    kind: Deployment
+    name: crm-system
+- path: namespace-patch.yaml
+  target:
+    kind: Service
+    name: crm-service
+- path: namespace-patch.yaml
+  target:
+    kind: Ingress
+    name: crm-ingress
+- path: namespace-patch.yaml
+  target:
+    kind: HorizontalPodAutoscaler
+    name: crm-hpa
+- path: production-patch.yaml
+  target:
+    kind: Deployment
+    name: crm-system
+
+images:
+- name: ${DOCKER_REGISTRY}/crm-system
+  newTag: production
+
+configMapGenerator:
+- name: crm-config
+  literals:
+  - NODE_ENV=production
+  - LOG_LEVEL=info
+
+secretGenerator:
+- name: crm-secrets
+  envs:
+  - .env.production
