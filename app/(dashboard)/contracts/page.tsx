@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { 
-  Receipt, 
+  FileText, 
   Plus, 
   Search, 
   Filter, 
@@ -25,18 +25,16 @@ import {
   AlertTriangle,
   Download,
   Copy,
-  CreditCard,
-  Banknote,
-  TrendingUp,
-  TrendingDown
+  Shield,
+  FileSignature
 } from "lucide-react"
-import { useInvoiceStore, invoiceHelpers } from "@/stores/invoiceStore"
+import { useContractStore, contractHelpers } from "@/stores/contractStore"
 import { useModal, useDeleteModal } from "@/stores/modalStore"
 import { useNavigation } from "@/hooks/use-navigation"
 import { cn } from "@/lib/utils"
 
-export default function InvoicesPage() {
-  const { invoices, isLoading, error, fetchInvoices, deleteInvoice } = useInvoiceStore()
+export default function ContractsPage() {
+  const { contracts, isLoading, error, fetchContracts, deleteContract } = useContractStore()
   const { navigateTo } = useNavigation()
   const { openModal } = useModal()
   const { confirmDelete } = useDeleteModal()
@@ -48,8 +46,8 @@ export default function InvoicesPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
 
   useEffect(() => {
-    fetchInvoices()
-  }, [fetchInvoices])
+    fetchContracts()
+  }, [fetchContracts])
 
   const handleSearch = (query: string) => {
     setSearchQuery(query)
@@ -72,58 +70,53 @@ export default function InvoicesPage() {
     }
   }
 
-  const handleDeleteInvoice = (invoiceId: string, invoiceNumber: string) => {
-    confirmDelete(invoiceNumber, async () => {
+  const handleDeleteContract = (contractId: string, contractTitle: string) => {
+    confirmDelete(contractTitle, async () => {
       try {
-        await deleteInvoice(invoiceId)
+        await deleteContract(contractId)
       } catch (error) {
-        console.error("Failed to delete invoice:", error)
+        console.error("Failed to delete contract:", error)
       }
     })
   }
 
-  const handleViewInvoice = (invoiceId: string) => {
-    navigateTo(`/dashboard/invoices/${invoiceId}`)
+  const handleViewContract = (contractId: string) => {
+    navigateTo(`/dashboard/contracts/${contractId}`)
   }
 
-  const handleEditInvoice = (invoiceId: string) => {
-    navigateTo(`/dashboard/invoices/${invoiceId}/edit`)
+  const handleEditContract = (contractId: string) => {
+    navigateTo(`/dashboard/contracts/${contractId}/edit`)
   }
 
-  const handleAddInvoice = () => {
-    navigateTo("/dashboard/invoices/new")
+  const handleAddContract = () => {
+    navigateTo("/dashboard/contracts/new")
   }
 
-  const handleSendInvoice = (invoiceId: string) => {
-    // TODO: Implement send invoice functionality
-    console.log("Sending invoice:", invoiceId)
+  const handleSendContract = (contractId: string) => {
+    // TODO: Implement send contract functionality
+    console.log("Sending contract:", contractId)
   }
 
-  const handleDownloadInvoice = (invoiceId: string) => {
+  const handleDownloadContract = (contractId: string) => {
     // TODO: Implement download functionality
-    console.log("Downloading invoice:", invoiceId)
+    console.log("Downloading contract:", contractId)
   }
 
-  const handleDuplicateInvoice = (invoiceId: string) => {
+  const handleDuplicateContract = (contractId: string) => {
     // TODO: Implement duplicate functionality
-    console.log("Duplicating invoice:", invoiceId)
+    console.log("Duplicating contract:", contractId)
   }
 
-  const handleRecordPayment = (invoiceId: string) => {
-    // TODO: Implement record payment functionality
-    console.log("Recording payment for invoice:", invoiceId)
-  }
-
-  // Filter and sort invoices
-  const filteredInvoices = invoices
-    .filter((invoice) => {
+  // Filter and sort contracts
+  const filteredContracts = contracts
+    .filter((contract) => {
       const matchesSearch = searchQuery === "" || 
-        invoice.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        invoice.client_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        invoice.project_name?.toLowerCase().includes(searchQuery.toLowerCase())
+        contract.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        contract.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        contract.client_name?.toLowerCase().includes(searchQuery.toLowerCase())
       
-      const matchesStatus = statusFilter === "all" || invoice.status === statusFilter
-      const matchesType = typeFilter === "all" || invoice.type === typeFilter
+      const matchesStatus = statusFilter === "all" || contract.status === statusFilter
+      const matchesType = typeFilter === "all" || contract.type === typeFilter
       
       return matchesSearch && matchesStatus && matchesType
     })
@@ -132,9 +125,9 @@ export default function InvoicesPage() {
       let bValue: any
       
       switch (sortBy) {
-        case "invoice_number":
-          aValue = a.invoice_number
-          bValue = b.invoice_number
+        case "title":
+          aValue = a.title
+          bValue = b.title
           break
         case "client":
           aValue = a.client_name || ""
@@ -148,13 +141,17 @@ export default function InvoicesPage() {
           aValue = a.type
           bValue = b.type
           break
-        case "amount":
-          aValue = a.total_amount || 0
-          bValue = b.total_amount || 0
+        case "value":
+          aValue = a.total_value || 0
+          bValue = b.total_value || 0
           break
-        case "due_date":
-          aValue = a.due_date ? new Date(a.due_date).getTime() : 0
-          bValue = b.due_date ? new Date(b.due_date).getTime() : 0
+        case "start_date":
+          aValue = a.start_date ? new Date(a.start_date).getTime() : 0
+          bValue = b.start_date ? new Date(b.start_date).getTime() : 0
+          break
+        case "end_date":
+          aValue = a.end_date ? new Date(a.end_date).getTime() : 0
+          bValue = b.end_date ? new Date(b.end_date).getTime() : 0
           break
         case "created":
           aValue = new Date(a.created_at).getTime()
@@ -172,21 +169,21 @@ export default function InvoicesPage() {
       }
     })
 
-  const invoiceStats = invoiceHelpers.getInvoiceStats()
+  const contractStats = contractHelpers.getContractStats()
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "draft":
         return "bg-gray-100 text-gray-800"
-      case "sent":
-        return "bg-blue-100 text-blue-800"
-      case "paid":
-        return "bg-green-100 text-green-800"
-      case "overdue":
-        return "bg-red-100 text-red-800"
-      case "partial":
+      case "pending":
         return "bg-yellow-100 text-yellow-800"
-      case "cancelled":
+      case "active":
+        return "bg-green-100 text-green-800"
+      case "completed":
+        return "bg-blue-100 text-blue-800"
+      case "terminated":
+        return "bg-red-100 text-red-800"
+      case "expired":
         return "bg-orange-100 text-orange-800"
       default:
         return "bg-gray-100 text-gray-800"
@@ -195,15 +192,15 @@ export default function InvoicesPage() {
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case "one_time":
+      case "service":
         return "bg-purple-100 text-purple-800"
-      case "recurring":
+      case "nda":
         return "bg-indigo-100 text-indigo-800"
-      case "milestone":
+      case "msa":
         return "bg-teal-100 text-teal-800"
-      case "retainer":
+      case "sow":
         return "bg-pink-100 text-pink-800"
-      case "time_based":
+      case "maintenance":
         return "bg-cyan-100 text-cyan-800"
       default:
         return "bg-gray-100 text-gray-800"
@@ -213,32 +210,33 @@ export default function InvoicesPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "draft":
-        return <Receipt className="h-4 w-4 text-gray-600" />
-      case "sent":
-        return <Send className="h-4 w-4 text-blue-600" />
-      case "paid":
-        return <CheckCircle className="h-4 w-4 text-green-600" />
-      case "overdue":
-        return <AlertTriangle className="h-4 w-4 text-red-600" />
-      case "partial":
+        return <FileText className="h-4 w-4 text-gray-600" />
+      case "pending":
         return <Clock className="h-4 w-4 text-yellow-600" />
-      case "cancelled":
-        return <XCircle className="h-4 w-4 text-orange-600" />
+      case "active":
+        return <CheckCircle className="h-4 w-4 text-green-600" />
+      case "completed":
+        return <CheckCircle className="h-4 w-4 text-blue-600" />
+      case "terminated":
+        return <XCircle className="h-4 w-4 text-red-600" />
+      case "expired":
+        return <AlertTriangle className="h-4 w-4 text-orange-600" />
       default:
-        return <Receipt className="h-4 w-4 text-gray-600" />
+        return <FileText className="h-4 w-4 text-gray-600" />
     }
   }
 
-  const isOverdue = (dueDate: string | null) => {
-    if (!dueDate) return false
-    return new Date(dueDate) < new Date()
+  const isExpired = (endDate: string | null) => {
+    if (!endDate) return false
+    return new Date(endDate) < new Date()
   }
 
-  const getPaymentProgress = (invoice: any) => {
-    const total = invoice.total_amount || 0
-    const paid = invoice.paid_amount || 0
-    if (total === 0) return 0
-    return Math.round((paid / total) * 100)
+  const isExpiringSoon = (endDate: string | null) => {
+    if (!endDate) return false
+    const end = new Date(endDate)
+    const now = new Date()
+    const daysUntilExpiry = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    return daysUntilExpiry <= 30 && daysUntilExpiry > 0
   }
 
   if (isLoading) {
@@ -246,7 +244,7 @@ export default function InvoicesPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading invoices...</p>
+          <p className="mt-4 text-gray-600">Loading contracts...</p>
         </div>
       </div>
     )
@@ -257,8 +255,8 @@ export default function InvoicesPage() {
       <Card>
         <CardContent className="flex items-center justify-center h-32">
           <div className="text-center">
-            <p className="text-red-600">Error loading invoices: {error}</p>
-            <Button onClick={() => fetchInvoices()} className="mt-2">
+            <p className="text-red-600">Error loading contracts: {error}</p>
+            <Button onClick={() => fetchContracts()} className="mt-2">
               Retry
             </Button>
           </div>
@@ -272,14 +270,14 @@ export default function InvoicesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Invoices</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Contracts</h1>
           <p className="text-gray-600">
-            Manage your billing, track payments, and monitor cash flow
+            Manage your legal agreements and service contracts
           </p>
         </div>
-        <Button onClick={handleAddInvoice} className="flex items-center space-x-2">
+        <Button onClick={handleAddContract} className="flex items-center space-x-2">
           <Plus className="h-4 w-4" />
-          <span>New Invoice</span>
+          <span>New Contract</span>
         </Button>
       </div>
 
@@ -287,73 +285,73 @@ export default function InvoicesPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
-            <Receipt className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Contracts</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{invoiceStats.total}</div>
+            <div className="text-2xl font-bold">{contractStats.total}</div>
             <p className="text-xs text-muted-foreground">
-              +{invoiceStats.newInvoicesThisMonth} this month
+              +{contractStats.newContractsThisMonth} this month
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Paid</CardTitle>
+            <CardTitle className="text-sm font-medium">Active</CardTitle>
             <div className="h-4 w-4 rounded-full bg-green-100 flex items-center justify-center">
               <div className="h-2 w-2 rounded-full bg-green-600"></div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{invoiceStats.paid}</div>
+            <div className="text-2xl font-bold">{contractStats.active}</div>
             <p className="text-xs text-muted-foreground">
-              {((invoiceStats.paid / invoiceStats.total) * 100).toFixed(1)}% of total
+              {((contractStats.active / contractStats.total) * 100).toFixed(1)}% of total
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
+            <CardTitle className="text-sm font-medium">Pending</CardTitle>
             <div className="h-4 w-4 rounded-full bg-yellow-100 flex items-center justify-center">
               <div className="h-2 w-2 rounded-full bg-yellow-600"></div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{invoiceStats.outstanding}</div>
+            <div className="text-2xl font-bold">{contractStats.pending}</div>
             <p className="text-xs text-muted-foreground">
-              ${invoiceStats.outstandingAmount.toLocaleString()}
+              Awaiting signature
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${invoiceStats.totalRevenue.toLocaleString()}
+              ${contractStats.totalValue.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              ${invoiceStats.averageInvoiceValue.toFixed(0)} avg per invoice
+              ${contractStats.averageValue.toFixed(0)} avg per contract
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-            <div className="h-4 w-4 rounded-full bg-red-100 flex items-center justify-center">
-              <div className="h-2 w-2 rounded-full bg-red-600"></div>
+            <CardTitle className="text-sm font-medium">Expiring Soon</CardTitle>
+            <div className="h-4 w-4 rounded-full bg-orange-100 flex items-center justify-center">
+              <div className="h-2 w-2 rounded-full bg-orange-600"></div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{invoiceStats.overdue}</div>
+            <div className="text-2xl font-bold">{contractStats.expiringSoon}</div>
             <p className="text-xs text-muted-foreground">
-              ${invoiceStats.overdueAmount.toLocaleString()}
+              Within 30 days
             </p>
           </CardContent>
         </Card>
@@ -373,7 +371,7 @@ export default function InvoicesPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search invoices by number, client, or project..."
+                  placeholder="Search contracts by title, description, or client..."
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="pl-10"
@@ -387,11 +385,11 @@ export default function InvoicesPage() {
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="sent">Sent</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="overdue">Overdue</SelectItem>
-                <SelectItem value="partial">Partial</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="terminated">Terminated</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={handleTypeFilter}>
@@ -400,23 +398,23 @@ export default function InvoicesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="one_time">One Time</SelectItem>
-                <SelectItem value="recurring">Recurring</SelectItem>
-                <SelectItem value="milestone">Milestone</SelectItem>
-                <SelectItem value="retainer">Retainer</SelectItem>
-                <SelectItem value="time_based">Time Based</SelectItem>
+                <SelectItem value="service">Service</SelectItem>
+                <SelectItem value="nda">NDA</SelectItem>
+                <SelectItem value="msa">MSA</SelectItem>
+                <SelectItem value="sow">SOW</SelectItem>
+                <SelectItem value="maintenance">Maintenance</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Invoices Table */}
+      {/* Contracts Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Invoices</CardTitle>
+          <CardTitle>All Contracts</CardTitle>
           <CardDescription>
-            {filteredInvoices.length} of {invoices.length} invoices
+            {filteredContracts.length} of {contracts.length} contracts
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -426,11 +424,11 @@ export default function InvoicesPage() {
                 <TableRow>
                   <TableHead 
                     className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("invoice_number")}
+                    onClick={() => handleSort("title")}
                   >
                     <div className="flex items-center space-x-1">
-                      <span>Invoice</span>
-                      {sortBy === "invoice_number" && (
+                      <span>Contract</span>
+                      {sortBy === "title" && (
                         <span className="text-xs">
                           {sortOrder === "asc" ? "↑" : "↓"}
                         </span>
@@ -478,11 +476,11 @@ export default function InvoicesPage() {
                   </TableHead>
                   <TableHead 
                     className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("amount")}
+                    onClick={() => handleSort("value")}
                   >
                     <div className="flex items-center space-x-1">
-                      <span>Amount</span>
-                      {sortBy === "amount" && (
+                      <span>Value</span>
+                      {sortBy === "value" && (
                         <span className="text-xs">
                           {sortOrder === "asc" ? "↑" : "↓"}
                         </span>
@@ -491,11 +489,24 @@ export default function InvoicesPage() {
                   </TableHead>
                   <TableHead 
                     className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => handleSort("due_date")}
+                    onClick={() => handleSort("start_date")}
                   >
                     <div className="flex items-center space-x-1">
-                      <span>Due Date</span>
-                      {sortBy === "due_date" && (
+                      <span>Start Date</span>
+                      {sortBy === "start_date" && (
+                        <span className="text-xs">
+                          {sortOrder === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50"
+                    onClick={() => handleSort("end_date")}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>End Date</span>
+                      {sortBy === "end_date" && (
                         <span className="text-xs">
                           {sortOrder === "asc" ? "↑" : "↓"}
                         </span>
@@ -506,87 +517,88 @@ export default function InvoicesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInvoices.map((invoice) => {
-                  const isOverdueInvoice = isOverdue(invoice.due_date)
-                  const paymentProgress = getPaymentProgress(invoice)
+                {filteredContracts.map((contract) => {
+                  const isExpiredContract = isExpired(contract.end_date)
+                  const isExpiringSoonContract = isExpiringSoon(contract.end_date)
                   
                   return (
-                    <TableRow key={invoice.id} className="hover:bg-gray-50">
+                    <TableRow key={contract.id} className="hover:bg-gray-50">
                       <TableCell>
                         <div className="flex items-center space-x-3">
                           <div className="flex-shrink-0">
-                            {getStatusIcon(invoice.status)}
+                            {getStatusIcon(contract.status)}
                           </div>
                           <div>
-                            <div className="font-medium">{invoice.invoice_number}</div>
-                            {invoice.project_name && (
-                              <div className="text-sm text-gray-500">
-                                {invoice.project_name}
+                            <div className="font-medium">{contract.title}</div>
+                            {contract.description && (
+                              <div className="text-sm text-gray-500 truncate max-w-xs">
+                                {contract.description}
                               </div>
                             )}
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        {invoice.client_name && (
+                        {contract.client_name && (
                           <div className="flex items-center space-x-2">
                             <Avatar className="h-6 w-6">
                               <AvatarFallback className="text-xs">
-                                {invoice.client_name.charAt(0).toUpperCase()}
+                                {contract.client_name.charAt(0).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
-                            <span className="text-sm">{invoice.client_name}</span>
+                            <span className="text-sm">{contract.client_name}</span>
                           </div>
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge className={getStatusColor(invoice.status)}>
-                          {invoice.status}
+                        <Badge className={getStatusColor(contract.status)}>
+                          {contract.status}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge className={getTypeColor(invoice.type)}>
-                          {invoice.type.replace('_', ' ')}
+                        <Badge className={getTypeColor(contract.type)}>
+                          {contract.type.toUpperCase()}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="font-medium">
-                              ${(invoice.total_amount || 0).toLocaleString()}
-                            </span>
-                            {invoice.paid_amount > 0 && (
-                              <span className="text-xs text-green-600">
-                                ${(invoice.paid_amount || 0).toLocaleString()} paid
-                              </span>
-                            )}
-                          </div>
-                          {invoice.paid_amount > 0 && invoice.paid_amount < (invoice.total_amount || 0) && (
-                            <div className="w-full bg-gray-200 rounded-full h-1">
-                              <div 
-                                className="bg-green-600 h-1 rounded-full" 
-                                style={{ width: `${paymentProgress}%` }}
-                              ></div>
-                            </div>
-                          )}
+                        <div className="flex items-center space-x-1">
+                          <DollarSign className="h-3 w-3 text-gray-400" />
+                          <span className="text-sm">
+                            ${(contract.total_value || 0).toLocaleString()}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        {invoice.due_date ? (
+                        {contract.start_date ? (
+                          <div className="flex items-center space-x-1">
+                            <Calendar className="h-3 w-3 text-gray-400" />
+                            <span className="text-sm">
+                              {new Date(contract.start_date).toLocaleDateString()}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">Not set</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {contract.end_date ? (
                           <div className={cn(
                             "flex items-center space-x-1",
-                            isOverdueInvoice && "text-red-600"
+                            (isExpiredContract || isExpiringSoonContract) && "text-red-600"
                           )}>
                             <Calendar className="h-3 w-3 text-gray-400" />
                             <span className="text-sm">
-                              {new Date(invoice.due_date).toLocaleDateString()}
+                              {new Date(contract.end_date).toLocaleDateString()}
                             </span>
-                            {isOverdueInvoice && (
-                              <span className="text-xs text-red-600">Overdue</span>
+                            {isExpiredContract && (
+                              <span className="text-xs text-red-600">Expired</span>
+                            )}
+                            {isExpiringSoonContract && (
+                              <span className="text-xs text-orange-600">Expiring</span>
                             )}
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-400">No due date</span>
+                          <span className="text-sm text-gray-400">No end date</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -594,17 +606,17 @@ export default function InvoicesPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleViewInvoice(invoice.id)}
+                            onClick={() => handleViewContract(contract.id)}
                             className="h-8 w-8 p-0"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {invoice.status === "draft" && (
+                          {contract.status === "draft" && (
                             <>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleEditInvoice(invoice.id)}
+                                onClick={() => handleEditContract(contract.id)}
                                 className="h-8 w-8 p-0"
                               >
                                 <Edit className="h-4 w-4" />
@@ -612,27 +624,17 @@ export default function InvoicesPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleSendInvoice(invoice.id)}
+                                onClick={() => handleSendContract(contract.id)}
                                 className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
                               >
                                 <Send className="h-4 w-4" />
                               </Button>
                             </>
                           )}
-                          {invoice.status === "sent" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRecordPayment(invoice.id)}
-                              className="h-8 w-8 p-0 text-green-600 hover:text-green-700"
-                            >
-                              <CreditCard className="h-4 w-4" />
-                            </Button>
-                          )}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDownloadInvoice(invoice.id)}
+                            onClick={() => handleDownloadContract(contract.id)}
                             className="h-8 w-8 p-0"
                           >
                             <Download className="h-4 w-4" />
@@ -640,7 +642,7 @@ export default function InvoicesPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDuplicateInvoice(invoice.id)}
+                            onClick={() => handleDuplicateContract(contract.id)}
                             className="h-8 w-8 p-0"
                           >
                             <Copy className="h-4 w-4" />
@@ -648,7 +650,7 @@ export default function InvoicesPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDeleteInvoice(invoice.id, invoice.invoice_number)}
+                            onClick={() => handleDeleteContract(contract.id, contract.title)}
                             className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -662,22 +664,22 @@ export default function InvoicesPage() {
             </Table>
           </div>
           
-          {filteredInvoices.length === 0 && (
+          {filteredContracts.length === 0 && (
             <div className="text-center py-8">
-              <Receipt className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                No invoices found
+                No contracts found
               </h3>
               <p className="text-gray-500 mb-4">
                 {searchQuery || statusFilter !== "all" || typeFilter !== "all"
                   ? "Try adjusting your search or filters"
-                  : "Get started by creating your first invoice"
+                  : "Get started by creating your first contract"
                 }
               </p>
               {!searchQuery && statusFilter === "all" && typeFilter === "all" && (
-                <Button onClick={handleAddInvoice}>
+                <Button onClick={handleAddContract}>
                   <Plus className="h-4 w-4 mr-2" />
-                  New Invoice
+                  New Contract
                 </Button>
               )}
             </div>
