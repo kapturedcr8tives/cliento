@@ -1,0 +1,82 @@
+groups:
+  - name: crm-system
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{container="crm-app"}[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on CRM system"
+          description: "CPU usage is above 80% for 5 minutes"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (container_memory_usage_bytes{container="crm-app"} / container_spec_memory_limit_bytes{container="crm-app"}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on CRM system"
+          description: "Memory usage is above 85% for 5 minutes"
+
+      # Pod restarting frequently
+      - alert: PodRestartingFrequently
+        expr: increase(kube_pod_container_status_restarts_total{container="crm-app"}[15m]) > 3
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRM pod restarting frequently"
+          description: "Pod has restarted more than 3 times in 15 minutes"
+
+      # High response time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="crm-system"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time on CRM system"
+          description: "95th percentile response time is above 2 seconds"
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{job="crm-system", status=~"5.."}[5m]) / rate(http_requests_total{job="crm-system"}[5m]) * 100 > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate on CRM system"
+          description: "Error rate is above 5% for 5 minutes"
+
+      # Service down
+      - alert: ServiceDown
+        expr: up{job="crm-system"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRM service is down"
+          description: "CRM service has been down for more than 1 minute"
+
+      # Disk space running low
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space is running low"
+          description: "Disk space usage is above 90%"
+
+      # Network connectivity issues
+      - alert: NetworkConnectivityIssues
+        expr: rate(http_request_duration_seconds_count{job="crm-system"}[5m]) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Network connectivity issues detected"
+          description: "No requests received in the last 2 minutes"

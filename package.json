@@ -6,7 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "optimize": "node scripts/optimize-build.js",
+    "deploy:staging": "./scripts/deploy.sh staging",
+    "deploy:production": "./scripts/deploy.sh production",
+    "docker:build": "docker build -t crm-system .",
+    "docker:run": "docker run -p 3000:3000 crm-system",
+    "k8s:apply": "kubectl apply -k k8s/overlays/staging",
+    "k8s:apply:prod": "kubectl apply -k k8s/overlays/production",
+    "test:e2e": "playwright test",
+    "test:unit": "jest",
+    "security:audit": "pnpm audit --audit-level moderate",
+    "security:fix": "pnpm audit fix",
+    "performance:lighthouse": "lighthouse http://localhost:3000 --output html --output-path ./lighthouse-report.html"
   },
   "dependencies": {
     "@hello-pangea/dnd": "latest",
