@@ -1,308 +1,565 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Users, FolderOpen, CheckSquare, DollarSign, TrendingUp, Clock, Plus, ArrowRight, FileText } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { 
+  Users, 
+  FolderOpen, 
+  Receipt, 
+  TrendingUp, 
+  Clock, 
+  CheckCircle, 
+  AlertCircle,
+  Plus,
+  DollarSign,
+  Target,
+  Activity,
+  Calendar,
+  BarChart3,
+  PieChart,
+  LineChart
+} from "lucide-react"
+import { useAuthStore } from "@/stores/authStore"
+import { useClientStore, clientHelpers } from "@/stores/clientStore"
+import { useProjectStore, projectHelpers } from "@/stores/projectStore"
+import { useInvoiceStore, invoiceHelpers } from "@/stores/invoiceStore"
+import { useAnalyticsStore } from "@/stores/analyticsStore"
+import { useNotifications } from "@/stores/notificationStore"
 import { useNavigation } from "@/hooks/use-navigation"
 import { quickActionsConfig } from "@/lib/routes"
+import { cn } from "@/lib/utils"
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<any>(null)
-  const [stats, setStats] = useState({
-    clients: 0,
-    projects: 0,
-    tasks: 0,
-    revenue: 0,
-  })
-  const [loading, setLoading] = useState(true)
-
-  const navigation = useNavigation()
+  const { user, organization } = useAuthStore()
+  const { clients, fetchClients } = useClientStore()
+  const { projects, fetchProjects } = useProjectStore()
+  const { invoices, fetchInvoices } = useInvoiceStore()
+  const { analytics, fetchAnalytics } = useAnalyticsStore()
+  const { notifications, unreadCount, fetchNotifications } = useNotifications()
+  const { navigateTo } = useNavigation()
+  
+  const [activeTab, setActiveTab] = useState("overview")
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      setUser(session?.user)
-    }
-
-    const fetchStats = async () => {
+    const loadDashboardData = async () => {
       try {
-        const [clientsResult, projectsResult, tasksResult] = await Promise.all([
-          supabase.from("clients").select("*", { count: "exact", head: true }),
-          supabase.from("projects").select("*", { count: "exact", head: true }),
-          supabase.from("tasks").select("*", { count: "exact", head: true }),
+        await Promise.all([
+          fetchClients(),
+          fetchProjects(),
+          fetchInvoices(),
+          fetchAnalytics(),
+          fetchNotifications(),
         ])
-
-        setStats({
-          clients: clientsResult.count || 0,
-          projects: projectsResult.count || 0,
-          tasks: tasksResult.count || 0,
-          revenue: 45230, // Mock data
-        })
       } catch (error) {
-        console.error("Error fetching stats:", error)
+        console.error("Failed to load dashboard data:", error)
       } finally {
-        setLoading(false)
+        setIsLoading(false)
       }
     }
 
-    getUser()
-    fetchStats()
-  }, [])
+    loadDashboardData()
+  }, [fetchClients, fetchProjects, fetchInvoices, fetchAnalytics, fetchNotifications])
 
-  const dashboardStats = [
-    {
-      title: "Total Clients",
-      value: stats.clients.toString(),
-      change: "+2 this month",
-      icon: Users,
-      color: "text-blue-600",
-      onClick: navigation.goToClients,
-    },
-    {
-      title: "Active Projects",
-      value: stats.projects.toString(),
-      change: "+3 this week",
-      icon: FolderOpen,
-      color: "text-green-600",
-      onClick: navigation.goToProjects,
-    },
-    {
-      title: "Pending Tasks",
-      value: stats.tasks.toString(),
-      change: "-5 today",
-      icon: CheckSquare,
-      color: "text-orange-600",
-      onClick: navigation.goToTasks,
-    },
-    {
-      title: "Revenue",
-      value: `$${stats.revenue.toLocaleString()}`,
-      change: "+12% this month",
-      icon: DollarSign,
-      color: "text-emerald-600",
-      onClick: navigation.goToReports,
-    },
-  ]
-
-  const recentActivity = [
-    {
-      action: "New client added",
-      client: "Acme Corporation",
-      time: "2 hours ago",
-      type: "client",
-      onClick: () => navigation.goToClients(),
-    },
-    {
-      action: "Project completed",
-      client: "Tech Startup Inc",
-      time: "4 hours ago",
-      type: "project",
-      onClick: () => navigation.goToProjects(),
-    },
-    {
-      action: "Invoice sent",
-      client: "Design Agency",
-      time: "6 hours ago",
-      type: "invoice",
-      onClick: () => navigation.goToInvoices(),
-    },
-    {
-      action: "Task completed",
-      client: "E-commerce Store",
-      time: "8 hours ago",
-      type: "task",
-      onClick: () => navigation.goToTasks(),
-    },
-  ]
-
-  // Icon mapping object
-  const iconMap = {
-    Users: Users,
-    FolderOpen: FolderOpen,
-    CheckSquare: CheckSquare,
-    DollarSign: DollarSign,
-    Plus: Plus,
-    FileText: FileText,
-  }
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="h-8 w-64 bg-gray-200 rounded animate-pulse mb-2"></div>
-            <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
-          </div>
-          <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <div className="animate-pulse">
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                  <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
-                  <div className="h-3 bg-gray-200 rounded w-full"></div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
         </div>
       </div>
     )
   }
 
+  const clientStats = clientHelpers.getClientStats()
+  const projectStats = projectHelpers.getProjectStats()
+  const invoiceStats = invoiceHelpers.getInvoiceStats()
+
   return (
     <div className="space-y-6">
-      {/* Welcome Header */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Welcome back, {user?.user_metadata?.full_name || "User"}!
-          </h1>
-          <p className="text-gray-600">Here's what's happening with your business today.</p>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-600">
+            Welcome back, {user?.full_name || user?.email}!
+          </p>
         </div>
-        <Button onClick={navigation.goToReports}>
-          <TrendingUp className="mr-2 h-4 w-4" />
-          View Reports
-        </Button>
+        <div className="flex items-center space-x-4">
+          <Badge variant="secondary" className="flex items-center space-x-1">
+            <AlertCircle className="h-4 w-4" />
+            <span>{unreadCount} new notifications</span>
+          </Badge>
+          <Button onClick={() => navigateTo("/dashboard/settings")}>
+            Settings
+          </Button>
+        </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {dashboardStats.map((stat) => (
-          <Card key={stat.title} className="hover:shadow-md transition-all cursor-pointer group" onClick={stat.onClick}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-              <div className="flex items-center space-x-2">
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                <ArrowRight className="h-3 w-3 text-gray-400 group-hover:text-gray-600 transition-colors" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">{stat.change}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Activity className="h-5 w-5" />
+            <span>Quick Actions</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {quickActionsConfig.map((action) => (
+              <Button
+                key={action.name}
+                variant="outline"
+                className="h-auto p-4 flex flex-col items-center space-y-2"
+                onClick={() => navigateTo(action.href)}
+              >
+                <div className={cn(
+                  "p-2 rounded-full",
+                  action.color === "blue" && "bg-blue-100 text-blue-600",
+                  action.color === "green" && "bg-green-100 text-green-600",
+                  action.color === "orange" && "bg-orange-100 text-orange-600",
+                  action.color === "emerald" && "bg-emerald-100 text-emerald-600",
+                  action.color === "purple" && "bg-purple-100 text-purple-600",
+                  action.color === "indigo" && "bg-indigo-100 text-indigo-600",
+                )}>
+                  <Plus className="h-4 w-4" />
+                </div>
+                <span className="text-sm font-medium">{action.name}</span>
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest updates from your workspace</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivity.map((activity, index) => (
-                <div
-                  key={index}
-                  className="flex items-center space-x-4 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={activity.onClick}
-                >
-                  <div className="flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                      <Clock className="h-4 w-4 text-blue-600" />
-                    </div>
+      {/* Main Dashboard Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="recent">Recent Activity</TabsTrigger>
+          <TabsTrigger value="performance">Performance</TabsTrigger>
+        </TabsList>
+
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* Key Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ${invoiceStats.totalAmount.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  +{invoiceStats.paidAmount.toLocaleString()} collected
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Active Clients</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{clientStats.active}</div>
+                <p className="text-xs text-muted-foreground">
+                  +{clientStats.newClientsThisMonth} this month
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
+                <FolderOpen className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{projectStats.active}</div>
+                <p className="text-xs text-muted-foreground">
+                  {projectStats.completed} completed
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Outstanding Invoices</CardTitle>
+                <Receipt className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ${invoiceStats.outstandingAmount.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {invoiceStats.sent + invoiceStats.viewed + invoiceStats.overdue} invoices
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Charts and Progress */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Revenue Overview</CardTitle>
+                <CardDescription>
+                  Monthly revenue trends and projections
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">This Month</span>
+                    <span className="text-sm text-green-600">+12.5%</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{activity.action}</p>
-                    <p className="text-sm text-gray-500">{activity.client}</p>
-                  </div>
-                  <div className="flex-shrink-0 flex items-center space-x-2">
-                    <Badge variant="secondary">{activity.time}</Badge>
-                    <ArrowRight className="h-3 w-3 text-gray-400" />
+                  <Progress value={75} className="h-2" />
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span>${invoiceStats.monthlyRevenue.toLocaleString()}</span>
+                    <span>Target: $50,000</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common tasks to get you started</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {quickActionsConfig.slice(0, 6).map((action) => {
-                // Get the icon component from our mapping or default to Plus
-                const IconComponent = iconMap[action.icon as keyof typeof iconMap] || Plus
+            <Card>
+              <CardHeader>
+                <CardTitle>Project Progress</CardTitle>
+                <CardDescription>
+                  Overall project completion status
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Completion Rate</span>
+                    <span className="text-sm text-blue-600">
+                      {projectStats.completed}/{projectStats.total}
+                    </span>
+                  </div>
+                  <Progress 
+                    value={projectStats.total > 0 ? (projectStats.completed / projectStats.total) * 100 : 0} 
+                    className="h-2" 
+                  />
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span>{projectStats.active} active</span>
+                    <span>{projectStats.completed} completed</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-                return (
-                  <Button
-                    key={action.name}
-                    variant="outline"
-                    className="h-auto p-4 flex flex-col items-center space-y-2 hover:shadow-md transition-all"
-                    onClick={() => navigation.navigateTo(action.href)}
-                  >
-                    <IconComponent className="h-5 w-5" />
-                    <span className="text-sm font-medium text-center">{action.name}</span>
-                  </Button>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Additional Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={navigation.goToLeads}>
-          <CardHeader>
-            <CardTitle className="text-lg">Sales Pipeline</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xl font-bold">12</p>
-                <p className="text-sm text-gray-600">Active Leads</p>
+          {/* Recent Activity */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+              <CardDescription>
+                Latest updates and notifications
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {notifications.slice(0, 5).map((notification) => (
+                  <div key={notification.id} className="flex items-center space-x-4">
+                    <div className="flex-shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                        <AlertCircle className="h-4 w-4 text-blue-600" />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">
+                        {notification.title}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {notification.message}
+                      </p>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <span className="text-xs text-gray-400">
+                        {new Date(notification.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <ArrowRight className="h-5 w-5 text-gray-400" />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={navigation.goToProposals}>
-          <CardHeader>
-            <CardTitle className="text-lg">Proposals</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xl font-bold">5</p>
-                <p className="text-sm text-gray-600">Pending Review</p>
-              </div>
-              <ArrowRight className="h-5 w-5 text-gray-400" />
-            </div>
-          </CardContent>
-        </Card>
+        {/* Analytics Tab */}
+        <TabsContent value="analytics" className="space-y-6">
+          {analytics ? (
+            <>
+              {/* Revenue Analytics */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <TrendingUp className="h-5 w-5" />
+                    <span>Revenue Analytics</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        ${analytics.revenue.total_revenue.toLocaleString()}
+                      </div>
+                      <p className="text-sm text-gray-600">Total Revenue</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        ${analytics.revenue.monthly_revenue.toLocaleString()}
+                      </div>
+                      <p className="text-sm text-gray-600">This Month</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-600">
+                        {analytics.revenue.growth_rate.toFixed(1)}%
+                      </div>
+                      <p className="text-sm text-gray-600">Growth Rate</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={navigation.goToInvoices}>
-          <CardHeader>
-            <CardTitle className="text-lg">Invoices</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xl font-bold">$8,500</p>
-                <p className="text-sm text-gray-600">Outstanding</p>
+              {/* Client Analytics */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Users className="h-5 w-5" />
+                    <span>Client Analytics</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-600">
+                        {analytics.clients.total_clients}
+                      </div>
+                      <p className="text-sm text-gray-600">Total Clients</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {analytics.clients.active_clients}
+                      </div>
+                      <p className="text-sm text-gray-600">Active Clients</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {analytics.clients.client_retention_rate.toFixed(1)}%
+                      </div>
+                      <p className="text-sm text-gray-600">Retention Rate</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Project Analytics */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <FolderOpen className="h-5 w-5" />
+                    <span>Project Analytics</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-indigo-600">
+                        {analytics.projects.total_projects}
+                      </div>
+                      <p className="text-sm text-gray-600">Total Projects</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {analytics.projects.active_projects}
+                      </div>
+                      <p className="text-sm text-gray-600">Active Projects</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-600">
+                        {analytics.projects.average_project_duration.toFixed(1)} days
+                      </div>
+                      <p className="text-sm text-gray-600">Avg Duration</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card>
+              <CardContent className="flex items-center justify-center h-32">
+                <p className="text-gray-500">Loading analytics...</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Recent Activity Tab */}
+        <TabsContent value="recent" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Clients</CardTitle>
+              <CardDescription>
+                Latest client additions and updates
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {clientHelpers.getRecentClients(5).map((client) => (
+                  <div key={client.id} className="flex items-center space-x-4">
+                    <div className="flex-shrink-0">
+                      <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                        <span className="text-sm font-medium text-blue-600">
+                          {client.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{client.name}</p>
+                      <p className="text-sm text-gray-500">{client.email}</p>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <Badge variant={client.status === 'active' ? 'default' : 'secondary'}>
+                        {client.status}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <ArrowRight className="h-5 w-5 text-gray-400" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Projects</CardTitle>
+              <CardDescription>
+                Latest project updates and milestones
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {projectHelpers.getRecentProjects(5).map((project) => (
+                  <div key={project.id} className="flex items-center space-x-4">
+                    <div className="flex-shrink-0">
+                      <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                        <FolderOpen className="h-5 w-5 text-green-600" />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{project.name}</p>
+                      <p className="text-sm text-gray-500">{project.description}</p>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <Badge variant={project.status === 'active' ? 'default' : 'secondary'}>
+                        {project.status}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Performance Tab */}
+        <TabsContent value="performance" className="space-y-6">
+          {analytics ? (
+            <>
+              {/* Team Productivity */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Target className="h-5 w-5" />
+                    <span>Team Productivity</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {analytics.performance.team_productivity.tasks_completed}
+                      </div>
+                      <p className="text-sm text-gray-600">Tasks Completed</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-red-600">
+                        {analytics.performance.team_productivity.tasks_overdue}
+                      </div>
+                      <p className="text-sm text-gray-600">Tasks Overdue</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {analytics.performance.team_productivity.average_task_duration.toFixed(1)} days
+                      </div>
+                      <p className="text-sm text-gray-600">Avg Task Duration</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-600">
+                        {analytics.performance.team_productivity.productivity_score.toFixed(1)}%
+                      </div>
+                      <p className="text-sm text-gray-600">Productivity Score</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Time Tracking */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Clock className="h-5 w-5" />
+                    <span>Time Tracking</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {analytics.performance.time_tracking.total_hours.toFixed(1)}h
+                      </div>
+                      <p className="text-sm text-gray-600">Total Hours</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {analytics.performance.time_tracking.billable_hours.toFixed(1)}h
+                      </div>
+                      <p className="text-sm text-gray-600">Billable Hours</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-600">
+                        {analytics.performance.time_tracking.utilization_rate.toFixed(1)}%
+                      </div>
+                      <p className="text-sm text-gray-600">Utilization Rate</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-600">
+                        ${analytics.performance.time_tracking.average_hourly_rate.toFixed(2)}
+                      </div>
+                      <p className="text-sm text-gray-600">Avg Hourly Rate</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card>
+              <CardContent className="flex items-center justify-center h-32">
+                <p className="text-gray-500">Loading performance data...</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
